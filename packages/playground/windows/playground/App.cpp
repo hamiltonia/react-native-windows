@@ -12,6 +12,7 @@ using namespace Windows::UI::Xaml::Controls;
 using namespace Windows::UI::Xaml::Navigation;
 using namespace playground;
 using namespace playground::implementation;
+using namespace Microsoft::Gaming::XboxGameBar;
 
 /// <summary>
 /// Initializes the singleton application object.  This is the first line of authored code
@@ -81,6 +82,48 @@ void App::OnLaunched(LaunchActivatedEventArgs const &e) {
       Window::Current().Activate();
     }
   }
+}
+
+void App::OnActivated(IActivatedEventArgs const &e) {
+  XboxGameBarWidgetActivatedEventArgs widgetArgs{nullptr};
+
+  if (e.Kind() == ActivationKind::Protocol) {
+    auto protocolArgs = e.try_as<IProtocolActivatedEventArgs>();
+    if (protocolArgs) {
+      // If scheme name is ms-gamebarwidget, Xbox Game Bar is activating us.
+      const wchar_t *scheme = protocolArgs.Uri().SchemeName().c_str();
+      if (0 == wcscmp(scheme, L"ms-gamebarwidget")) {
+        widgetArgs = e.try_as<XboxGameBarWidgetActivatedEventArgs>();
+      }
+    }
+  }
+
+  if (widgetArgs) {
+    std::wstring appExtId{widgetArgs.AppExtensionId()};
+
+    if (widgetArgs.IsLaunchActivation()) {
+      auto rootFrame = Frame();
+      rootFrame.NavigationFailed({this, &App::OnNavigationFailed});
+      Window::Current().Content(rootFrame);
+
+      if (0 == appExtId.compare(L"Widget1")) {
+        m_widget1 = XboxGameBarWidget(widgetArgs, Window::Current().CoreWindow(), rootFrame);
+        rootFrame.Navigate(xaml_typename<playground::MainPage>(), m_widget1);
+
+        m_widget1WindowClosedHandlerToken = Window::Current().Closed({get_weak(), &App::Widget1WindowClosedHandler});
+      } else {
+        // Unknown - Game Bar should never send you an unknown App Extension Id
+        return;
+      }
+
+      Window::Current().Activate();
+    }
+  }
+}
+
+void App::Widget1WindowClosedHandler(IInspectable const &, IInspectable const &) {
+  m_widget1 = nullptr;
+  Window::Current().Closed(m_widget1WindowClosedHandlerToken);
 }
 
 /// <summary>
